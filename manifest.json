@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Chess Move Coach",
+  "version": "0.1.0",
+  "description": "A training-mode chess coach for Lichess.",
+
+  "permissions": ["offscreen"],
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://lichess.org/*"],
+      "js": ["content.js", "stockfish-test.js"],
+      "css": ["style.css"]
+    }
+  ],
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; object-src 'self';"
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "engine.html",
+        "stockfish/*"
+      ],
+      "matches": [
+        "https://lichess.org/*"
+      ]
+    }
+  ]
+}
