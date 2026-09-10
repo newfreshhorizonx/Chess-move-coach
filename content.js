@@ -6,7 +6,7 @@ coach.innerHTML = `
   <div id="coach-status">Checking game...</div>
   <div id="coach-fen" style="margin-top:8px; font-size:11px; word-break:break-all;"></div>
   <div id="coach-your-move" style="margin-top:10px; padding-top:8px; border-top:1px solid #ddd; font-size:13px;"></div>
-  <div id="coach-opponent-move" style="margin-top:6px; font-size:13px; color:#555;"></div>
+  <div id="coach-opponent-move" style="margin-top:6px; font-size:13px;"></div>
 `;
 
 coach.style.position = "fixed";
@@ -26,17 +26,43 @@ document.body.appendChild(coach);
 
 
 function getPlayerColor() {
-  const wrap = document.querySelector(".cg-wrap");
+  const wraps = document.querySelectorAll(".cg-wrap");
 
-  if (!wrap) {
+  for (let i = 0; i < wraps.length; i++) {
+    const wrap = wraps[i];
+
+    if (wrap.closest(".round__app__board")) {
+      if (wrap.classList.contains("orientation-black")) {
+        return "black";
+      }
+      return "white";
+    }
+  }
+
+  if (wraps.length > 0) {
+    if (wraps[0].classList.contains("orientation-black")) {
+      return "black";
+    }
     return "white";
   }
 
-  if (wrap.classList.contains("orientation-black")) {
-    return "black";
+  return "white";
+}
+
+
+function getSideToMoveIsWhite() {
+  const whiteClock = document.querySelector(".rclock-white");
+  const blackClock = document.querySelector(".rclock-black");
+
+  if (whiteClock && whiteClock.classList.contains("running")) {
+    return true;
   }
 
-  return "white";
+  if (blackClock && blackClock.classList.contains("running")) {
+    return false;
+  }
+
+  return null;
 }
 
 
@@ -242,12 +268,11 @@ function uciToReadable(uciMove, position) {
 }
 
 
-let sideToMoveIsWhite = true;
 let plyCount = 0;
-let isFirstDetection = true;
+let lastKnownSideToMoveIsWhite = true;
 
 
-function buildFullFEN(boardFEN, position) {
+function buildFullFEN(boardFEN, position, sideToMoveIsWhite) {
   const sideToMove = sideToMoveIsWhite ? "w" : "b";
   const castling = getCastlingRights(position);
   const enPassant = "-";
@@ -285,15 +310,40 @@ function isGameFinished() {
 
 let lastPosition = "";
 let analysisInFlight = false;
+let queuedRequest = null;
 let pendingCheckTimeout = null;
+let requestCounter = 0;
+let latestRequestId = 0;
 
 
-function requestBestMove(fen, wasWhiteToMove, position) {
-  if (analysisInFlight) {
+function updateTurnHighlighting() {
+  const yourMoveDisplay = document.getElementById("coach-your-move");
+  const opponentMoveDisplay = document.getElementById("coach-opponent-move");
+
+  const playerColor = getPlayerColor();
+  const sideToMoveIsWhite = getSideToMoveIsWhite();
+
+  if (sideToMoveIsWhite === null) {
     return;
   }
 
-  analysisInFlight = true;
+  const isCurrentlyPlayersTurn =
+    (playerColor === "white" && sideToMoveIsWhite) ||
+    (playerColor === "black" && !sideToMoveIsWhite);
+
+  if (yourMoveDisplay) {
+    yourMoveDisplay.style.opacity = isCurrentlyPlayersTurn ? "1" : "0.4";
+  }
+
+  if (opponentMoveDisplay) {
+    opponentMoveDisplay.style.opacity = isCurrentlyPlayersTurn ? "0.4" : "1";
+  }
+}
+
+
+function requestBestMove(fen, wasWhiteToMove, position, moveNumber) {
+  const requestId = ++requestCounter;
+  latestRequestId = requestId;
 
   const playerColor = getPlayerColor();
   const isPlayersTurn =
@@ -309,29 +359,66 @@ function requestBestMove(fen, wasWhiteToMove, position) {
     opponentMoveDisplay.textContent = "Opponent's move: thinking...";
   }
 
+  if (analysisInFlight) {
+    queuedRequest = { fen: fen, wasWhiteToMove: wasWhiteToMove, position: position, requestId: requestId, moveNumber: moveNumber };
+    return;
+  }
+
+  analysisInFlight = true;
+  runAnalysis(fen, wasWhiteToMove, position, requestId, moveNumber);
+}
+
+
+function runAnalysis(fen, wasWhiteToMove, position, requestId, moveNumber) {
   chrome.runtime.sendMessage(
     { target: "offscreen", payload: { type: "ANALYZE", fen: fen } },
     function (response) {
       analysisInFlight = false;
 
-      const bestMoveRaw =
-        response && response.bestMove ? response.bestMove : null;
+      if (requestId === latestRequestId) {
+        const playerColor = getPlayerColor();
+        const isPlayersTurn =
+          (playerColor === "white" && wasWhiteToMove) ||
+          (playerColor === "black" && !wasWhiteToMove);
 
-      const readableMove = bestMoveRaw
-        ? uciToReadable(bestMoveRaw, position)
-        : null;
+        const yourMoveDisplay = document.getElementById("coach-your-move");
+        const opponentMoveDisplay = document.getElementById("coach-opponent-move");
 
-      if (isPlayersTurn && yourMoveDisplay) {
-        yourMoveDisplay.textContent = readableMove
-          ? "Your move: " + readableMove
-          : "Your move: no suggestion";
-      } else if (!isPlayersTurn && opponentMoveDisplay) {
-        opponentMoveDisplay.textContent = readableMove
-          ? "Opponent's move: " + readableMove
-          : "Opponent's move: no suggestion";
+        const bestMoveRaw =
+          response && response.bestMove ? response.bestMove : null;
+
+        let readableMove;
+
+        if (bestMoveRaw === "(none)") {
+          readableMove = "No legal moves (checkmate/stalemate)";
+        } else if (bestMoveRaw) {
+          readableMove = uciToReadable(bestMoveRaw, position);
+        } else {
+          readableMove = null;
+        }
+
+        const label = readableMove ? readableMove : "no suggestion";
+        const moveTag = "(move " + moveNumber + ")";
+
+        if (isPlayersTurn && yourMoveDisplay) {
+          yourMoveDisplay.textContent = "Your move " + moveTag + ": " + label;
+        } else if (!isPlayersTurn && opponentMoveDisplay) {
+          opponentMoveDisplay.textContent = "Opponent's move " + moveTag + ": " + label;
+        }
+
+        updateTurnHighlighting();
+
+        console.log("Chess Move Coach: best move =", readableMove);
+      } else {
+        console.log("Chess Move Coach: discarding superseded analysis result");
       }
 
-      console.log("Chess Move Coach: best move =", readableMove);
+      if (queuedRequest) {
+        const next = queuedRequest;
+        queuedRequest = null;
+        analysisInFlight = true;
+        runAnalysis(next.fen, next.wasWhiteToMove, next.position, next.requestId, next.moveNumber);
+      }
     }
   );
 }
@@ -377,6 +464,8 @@ function updateBoard() {
     pendingCheckTimeout = setTimeout(function () {
       confirmAndAnalyze(currentPosition);
     }, 250);
+  } else {
+    updateTurnHighlighting();
   }
 }
 
@@ -398,17 +487,20 @@ function confirmAndAnalyze(snapshotAtScheduleTime) {
     return;
   }
 
-  if (!isFirstDetection) {
-    plyCount++;
-    sideToMoveIsWhite = !sideToMoveIsWhite;
+  lastPosition = currentPosition;
+  plyCount++;
+
+  let sideToMoveIsWhite = getSideToMoveIsWhite();
+
+  if (sideToMoveIsWhite === null) {
+    sideToMoveIsWhite = !lastKnownSideToMoveIsWhite;
   }
 
-  isFirstDetection = false;
-
-  lastPosition = currentPosition;
+  lastKnownSideToMoveIsWhite = sideToMoveIsWhite;
 
   const boardFEN = positionToFEN(position);
-  const fullFEN = buildFullFEN(boardFEN, position);
+  const fullFEN = buildFullFEN(boardFEN, position, sideToMoveIsWhite);
+  const moveNumber = Math.floor(plyCount / 2) + 1;
 
   const status = document.getElementById("coach-status");
   const fenDisplay = document.getElementById("coach-fen");
@@ -421,10 +513,12 @@ function confirmAndAnalyze(snapshotAtScheduleTime) {
     fenDisplay.textContent = `FEN: ${fullFEN}`;
   }
 
+  updateTurnHighlighting();
+
   console.log("Position changed:", position);
   console.log("Full FEN:", fullFEN);
 
-  requestBestMove(fullFEN, sideToMoveIsWhite, position);
+  requestBestMove(fullFEN, sideToMoveIsWhite, position, moveNumber);
 }
 
 
