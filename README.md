@@ -2,6 +2,11 @@
 
 A browser extension for [Lichess](https://lichess.org) that reads the board directly from the page and runs [Stockfish](https://stockfishchess.org/) locally in the browser — free, unlimited computer analysis, no premium subscription required.
 
+![Status](https://img.shields.io/badge/status-prototype-orange)
+![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?logo=googlechrome&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)
+![Stockfish 18](https://img.shields.io/badge/engine-Stockfish%2018%20WASM-2E7D32)
+
 Built after switching from Chess.com to Lichess specifically to get this. Idea inspired by **Nebil Soussi**, who I'm building this with.
 
 ## What it does
@@ -33,7 +38,7 @@ This project intentionally has no build step — no Node, no npm, just plain JS.
    ```
 2. Open `chrome://extensions` in Chrome (or any Chromium-based browser, e.g. Vivaldi, Edge).
 3. Enable **Developer mode** (top right).
-4. Click **Load unpacked** and select the cloned `chess-move-coach` folder.
+4. Click **Load unpacked** and select the cloned `Chess-move-coach` folder.
 5. Open any game on [lichess.org](https://lichess.org) — the coach panel appears top-right.
 
 ## Architecture
