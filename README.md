@@ -57,6 +57,13 @@ back to content.js → displayed in the panel
 
 Stockfish is loaded via `fetch()` + Blob URL rather than a direct `chrome-extension://` worker URL, which is more reliable across Chromium extension contexts.
 
+
+## Also in this repo: Opening Trainer
+
+[`opening-trainer/`](opening-trainer/) is a separate, standalone practice app for my opening repertoire (London as White, Caro-Kann and King's Indian as Black). You play your side, it plays the opponent, with Learn/Drill modes, idea arrows and Lichess study export.
+
+**Play it:** https://newfreshhorizonx.github.io/Chess-move-coach/ · editing guide in [`opening-trainer/README.md`](opening-trainer/README.md)
+
 ## License
 
 Stockfish itself is GPL-3.0. This extension's own code is not yet licensed — treat as all-rights-reserved for now unless stated otherwise.

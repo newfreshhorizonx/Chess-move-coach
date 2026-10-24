@@ -1,0 +1,37 @@
+name: "Opening trainer: publish website"
+
+# Publishes only the opening-trainer/ folder to GitHub Pages.
+on:
+  push:
+    branches: [master]
+    paths: ["opening-trainer/**", ".github/workflows/opening-trainer-pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check every line is legal before publishing
+        run: node opening-trainer/tools/validate.js
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: opening-trainer
+      - id: deployment
+        uses: actions/deploy-pages@v4
